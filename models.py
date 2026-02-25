@@ -1,6 +1,23 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from db import db
 import uuid
+
+
+INDIA_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def _ensure_utc(dt: datetime):
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _format_indian_time(dt: datetime):
+    ts = _ensure_utc(dt)
+    if ts is None:
+        return None
+    return ts.astimezone(INDIA_TZ).isoformat()
 
 
 class Conversation(db.Model):
@@ -11,8 +28,12 @@ class Conversation(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(200), default="New Chat")
     summary = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     messages = db.relationship("Message", backref="conversation", lazy=True, cascade="all, delete-orphan")
     tool_runs = db.relationship("ToolRun", backref="conversation", lazy=True, cascade="all, delete-orphan")
@@ -22,8 +43,8 @@ class Conversation(db.Model):
         return {
             "id": self.id,
             "title": self.title,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": _format_indian_time(self.created_at),
+            "updated_at": _format_indian_time(self.updated_at),
             "user_id": self.user_id,
         }
 
@@ -35,14 +56,14 @@ class Message(db.Model):
     conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id"), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # user / assistant / system
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
             "id": self.id,
             "role": self.role,
             "content": self.content,
-            "created_at": self.created_at.isoformat(),
+            "created_at": _format_indian_time(self.created_at),
         }
 
 
